@@ -1,0 +1,24 @@
+
+==========================
+[2025-07-26 23:55:15] Starting Rs-ai run...
+Traceback (most recent call last):
+  File "/home/nomanrulesbuti/rs-ai/test_run.py", line 2, in <module>
+    from spine import Spine
+ImportError: cannot import name 'Spine' from 'spine' (/home/nomanrulesbuti/rs-ai/spine/__init__.py)
+[2025-07-26 23:55:15] Run complete.
+
+==========================
+[2025-07-26 23:55:43] Starting Rs-ai run...
+Traceback (most recent call last):
+  File "/home/nomanrulesbuti/rs-ai/test_run.py", line 2, in <module>
+    from spine import Spine
+ImportError: cannot import name 'Spine' from 'spine' (/home/nomanrulesbuti/rs-ai/spine/__init__.py)
+[2025-07-26 23:55:43] Run complete.
+
+==========================
+[2025-07-27 09:10:27] Starting Rs-ai run...
+Traceback (most recent call last):
+  File "/home/nomanrulesbuti/rs-ai/test_run.py", line 2, in <module>
+    from spine import Spine
+ImportError: cannot import name 'Spine' from 'spine' (/home/nomanrulesbuti/rs-ai/spine/__init__.py)
+[2025-07-27 09:10:27] Run complete.
