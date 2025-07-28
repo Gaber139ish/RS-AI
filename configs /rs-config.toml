@@ -1,0 +1,17 @@
+# Core module mappings
+[modules]
+meta_trainer = "spine.meta_trainer"
+curiosity     = "spine.curiosity_engine"
+introspection = "spine.introspection"
+
+# Training hyperparameters
+[training]
+inner_lr = 0.01
+outer_lr = 0.001
+threshold = 0.1
+
+# File and memory settings
+[filepaths]
+logbook      = "data/logs/reflections.md"
+memory_base  = "data/sponge"
+sponge_size  = [27, 27, 27]
