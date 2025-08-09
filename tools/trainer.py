@@ -15,6 +15,7 @@ from tools.reflection_logbook import ReflectionLogbook
 from tools.metrics import MetricsRegistry
 from tools.dashboard import start_dashboard, ControlBridge
 from memory.sponge_memory import create as create_entangled
+from memory.multiscale import create_multiscale
 
 
 class Orchestrator:
@@ -29,6 +30,8 @@ class Orchestrator:
         mem_backend = (config.get('memory', {}).get('backend', 'hffs') or 'hffs').lower()
         if mem_backend == 'entangled':
             self.memory = create_entangled(config)
+        elif mem_backend == 'multiscale':
+            self.memory = create_multiscale(config)
         else:
             self.memory = HFFSMemory(
                 base_path=config['filepaths']['memory_base'],

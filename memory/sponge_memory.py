@@ -6,6 +6,8 @@ from typing import Any, Dict, List, Tuple
 
 import numpy as np
 
+from .hebbian import HebbianUpdater
+
 
 def _ensure_dir(path: str) -> None:
     os.makedirs(path, exist_ok=True)
@@ -51,7 +53,7 @@ class SpongeTopology:
 
 
 class EntangledSpongeMemory:
-    def __init__(self, base_path: str, sponge_size: Tuple[int, int, int], block_size: Tuple[int, int, int] = (9, 9, 9), entanglement_strength: float = 0.15, neighbor_radius: int = 1, holographic_dim: int = 1024, seed: int = 42):
+    def __init__(self, base_path: str, sponge_size: Tuple[int, int, int], block_size: Tuple[int, int, int] = (9, 9, 9), entanglement_strength: float = 0.15, neighbor_radius: int = 1, holographic_dim: int = 1024, seed: int = 42, hebbian: bool = True, hebbian_lr: float = 0.001, hebbian_decay: float = 0.995):
         self.base_path = base_path
         self.sponge_size = tuple(sponge_size)
         self.block_size = tuple(block_size)
@@ -80,6 +82,9 @@ class EntangledSpongeMemory:
         rng = np.random.default_rng(seed)
         self.holo_proj = rng.normal(0, 1.0 / math.sqrt(self.holo_dim), size=(self.holo_dim, int(np.prod(self.sponge_size)))).astype(np.float32)
         self._lock = threading.Lock()
+
+        # Hebbian updater
+        self._hebbian = HebbianUpdater(lr=hebbian_lr, decay=hebbian_decay) if hebbian else None
 
     # Internal IO
     def _block_file(self, idx: Tuple[int, int, int]) -> str:
@@ -131,6 +136,9 @@ class EntangledSpongeMemory:
                 sx, sy, sz = self.topology.block_bounds(bidx)
                 local = sponge[sx, sy, sz]
                 current = self._read_block(bidx)
+                # Optional Hebbian modulation
+                if self._hebbian is not None:
+                    current = self._hebbian.update(current, pre=local, post=current)
                 # Direct write as EMA
                 updated = 0.9 * current + 0.1 * local
                 # Spread to neighbors
@@ -173,8 +181,6 @@ class EntangledSpongeMemory:
             try:
                 flat = sponge.reshape(-1)
                 global_latent = np.load(self.global_path)
-                # Pseudo-inverse refinement: add small correction from least squares
-                # Solve min ||P x - g||; x_update = P^T g scaled
                 correction = self.holo_proj.T @ global_latent
                 flat = 0.99 * flat + 0.01 * correction
                 sponge = flat.reshape(self.sponge_size)
@@ -222,6 +228,9 @@ def create(config: Dict[str, Any] | None = None) -> EntangledSpongeMemory:
         entanglement_strength = 0.15
         neighbor_radius = 1
         holo_dim = 1024
+        hebbian = True
+        hebbian_lr = 0.001
+        hebbian_decay = 0.995
     else:
         fp = config.get("filepaths", {})
         base = fp.get("memory_base", "data/sponge")
@@ -231,6 +240,9 @@ def create(config: Dict[str, Any] | None = None) -> EntangledSpongeMemory:
         entanglement_strength = float(memcfg.get("entanglement_strength", 0.15))
         neighbor_radius = int(memcfg.get("neighbor_radius", 1))
         holo_dim = int(memcfg.get("holographic_dim", 1024))
+        hebbian = bool(memcfg.get("hebbian", True))
+        hebbian_lr = float(memcfg.get("hebbian_lr", 0.001))
+        hebbian_decay = float(memcfg.get("hebbian_decay", 0.995))
     return EntangledSpongeMemory(
         base_path=base,
         sponge_size=sponge_size,
@@ -238,4 +250,7 @@ def create(config: Dict[str, Any] | None = None) -> EntangledSpongeMemory:
         entanglement_strength=entanglement_strength,
         neighbor_radius=neighbor_radius,
         holographic_dim=holo_dim,
+        hebbian=hebbian,
+        hebbian_lr=hebbian_lr,
+        hebbian_decay=hebbian_decay,
     )

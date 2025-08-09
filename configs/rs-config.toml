@@ -29,11 +29,14 @@ torch_hidden = 128
 
 # Memory backend
 [memory]
-backend = "entangled"  # options: hffs, entangled
+backend = "entangled"  # options: hffs, entangled, multiscale
 block_size = [9, 9, 9]
 entanglement_strength = 0.15
 neighbor_radius = 1
 holographic_dim = 1024
+hebbian = true
+hebbian_lr = 0.001
+hebbian_decay = 0.995
 
 # Contracts
 [contracts]
