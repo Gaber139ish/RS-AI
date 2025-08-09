@@ -1,7 +1,9 @@
 # Core module mappings
 [modules]
 hopfield      = "spine.modules.hopfield"
-# torch_mlp     = "spine.modules.torch_mlp"
+hrr           = "spine.modules.hrr"
+ssm           = "spine.modules.ssm"
+world_model   = "spine.world_model"
 introspection = "spine.introspection"
 
 # Branding
@@ -36,7 +38,7 @@ ssm_lr = 0.001
 
 # Memory backend
 [memory]
-backend = "entangled"  # options: hffs, entangled, multiscale, auto
+backend = "auto"  # options: hffs, entangled, multiscale, auto
 block_size = [9, 9, 9]
 entanglement_strength = 0.15
 neighbor_radius = 1
@@ -47,21 +49,21 @@ hebbian_decay = 0.995
 
 # Compression
 [compression]
-enabled = false
+enabled = true
 rank = 8
 
 # Auto control
 [auto]
-cooldown_s = 10.0
-explore_prob = 0.05
+cooldown_s = 5.0
+explore_prob = 0.10
 
 # ZKML
 [zkml]
-enabled = false
+enabled = true
 
 # TEE
 [tee]
-attest = false
+attest = true
 
 # Contracts
 [contracts]
