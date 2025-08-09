@@ -28,6 +28,16 @@ entanglement_strength = 0.15
 neighbor_radius = 1
 holographic_dim = 1024
 
+# Chain configuration
+[chain]
+num_nodes = 3
+rounds = 5
+round_time = 1.0
+base_reward = 1.0
+initial_balance = 10.0
+initial_stake = 5.0
+train_steps = 15
+
 # Orchestration
 [orchestrator]
 runtime_seconds = 8
