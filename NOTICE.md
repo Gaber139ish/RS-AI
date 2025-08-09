@@ -5,6 +5,4 @@ This repository contains proprietary concepts, designs, and implementations for 
 - Multithreaded AI training orchestrator and curiosity mechanisms
 - Federated AI-driven blockchain concepts, AI Coin tokenomics, and AI-proof-of-stake consensus
 
-All rights reserved by the Owner. Unauthorized use, distribution, or modification is prohibited unless explicitly permitted by the Owner in writing.
-
-Replace "Owner" with your legal entity or personal name for formal notices.
+All rights reserved by Gabriel Neal Christensen. Unauthorized use, distribution, or modification is prohibited unless explicitly permitted by Gabriel Neal Christensen in writing.

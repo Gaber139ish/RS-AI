@@ -10,6 +10,7 @@ introspection = "spine.introspection"
 ai_name = "RS-AI"
 token_symbol = "RSAI"
 token_name = "RS-AI Coin"
+legal_owner = "Gabriel Neal Christensen"
 
 # Training hyperparameters
 [training]
