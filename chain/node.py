@@ -9,10 +9,11 @@ from chain.crypto import generate_keypair, sign, verify_with_secret, pub_hex
 from chain.wallet import Wallet
 from chain.block import Block, Transaction
 from chain.ledger import Ledger
-from chain.consensus import select_winner, verify_block, mint_reward
+from chain.consensus import select_winner, verify_block, mint_reward, select_committee, slash_fraction
 from chain.consensus_bft import bft_commit
 from chain.contracts import ContractEngine
 from chain.p2p import InProcBus
+from chain.state import ChainState
 from spine.neural_spine import NeuralSpine
 from spine.curiosity_engine import CuriosityEngine
 from memory.sponge_memory import create as create_entangled
@@ -83,19 +84,33 @@ class FederatedChain:
         self.nodes: List[Node] = [Node(config, os.path.join(base_dir, f'node_{i}')) for i in range(num_nodes)]
         self.round_time = float(config.get('chain', {}).get('round_time', 2.0))
         self.base_reward = float(config.get('chain', {}).get('base_reward', 1.0))
+        self.state = ChainState()
+        for n in self.nodes:
+            self.state.set_stake(n.node_id, n.wallet.staked())
 
     def run_round(self) -> Dict[str, Any]:
         proposals: List[Tuple[Block, bytes]] = []
         for node in self.nodes:
             blk = node.propose_block(self.ledger)
             proposals.append((blk, node.pub))
-        # BFT commit (simulated majority)
-        quorum = max(1, len(self.nodes) // 2 + 1)
-        commit_idx = bft_commit(proposals, quorum=quorum)
-        if commit_idx < 0:
+        # Committee sampling (weighted)
+        committee = select_committee(proposals, k=max(1, len(self.nodes) // 2 + 1))
+        committee_blocks = [proposals[i] for i in committee]
+        commit_idx_local = bft_commit(committee_blocks, quorum=max(1, len(committee) // 2 + 1))
+        if commit_idx_local < 0:
             return {"status": "no_commit"}
+        # Map to global index
+        commit_idx = committee[commit_idx_local]
         blk, pub = proposals[commit_idx]
         if not verify_block(blk):
+            # Slash proposer
+            frac = slash_fraction('invalid_hash')
+            for n in self.nodes:
+                if n.node_id == blk.proposer:
+                    penalty = n.wallet.staked() * frac
+                    n.wallet.unstake(penalty)
+                    self.state.apply_slash(n.node_id, frac)
+                    break
             return {"status": "reject", "reason": "invalid_hash"}
         # Smart contracts
         context = {
@@ -108,7 +123,6 @@ class FederatedChain:
         actions = self.nodes[0].contracts.evaluate(context) if self.nodes else []
         for act in actions:
             if act['type'] == 'mint':
-                # Mint to proposer or specific address
                 to = act.get('to', blk.proposer)
                 for n in self.nodes:
                     if n.node_id == to:
@@ -123,8 +137,9 @@ class FederatedChain:
         winner_idx = commit_idx
         reward = mint_reward(blk.ai_score, base_reward=self.base_reward)
         self.nodes[winner_idx].wallet.deposit(reward)
+        self.state.set_stake(self.nodes[winner_idx].node_id, self.nodes[winner_idx].wallet.staked())
         appended = self.ledger.append(blk)
-        return {"status": "ok" if appended else "reject", "winner": blk.proposer, "reward": reward, "height": self.ledger.height(), "actions": actions}
+        return {"status": "ok" if appended else "reject", "winner": blk.proposer, "reward": reward, "height": self.ledger.height(), "actions": actions, "committee": committee}
 
     def run(self, rounds: int = 5) -> None:
         for _ in range(rounds):
