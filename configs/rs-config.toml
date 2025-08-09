@@ -1,7 +1,7 @@
 # Core module mappings
 [modules]
-dense         = "spine.modules.dense"
-# To enable PyTorch MLP instead, uncomment the following and comment out 'dense'
+hopfield      = "spine.modules.hopfield"
+# To enable PyTorch MLP instead, uncomment the following and comment out 'hopfield'
 # torch_mlp     = "spine.modules.torch_mlp"
 introspection = "spine.introspection"
 

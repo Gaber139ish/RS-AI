@@ -16,6 +16,8 @@ from tools.metrics import MetricsRegistry
 from tools.dashboard import start_dashboard, ControlBridge
 from memory.sponge_memory import create as create_entangled
 from memory.multiscale import create_multiscale
+from memory.guarded import GuardedMemory
+from tools.policy import PolicyEnforcer
 
 
 class Orchestrator:
@@ -29,14 +31,19 @@ class Orchestrator:
         self.logbook = ReflectionLogbook(config['filepaths']['logbook'])
         mem_backend = (config.get('memory', {}).get('backend', 'hffs') or 'hffs').lower()
         if mem_backend == 'entangled':
-            self.memory = create_entangled(config)
+            backend = create_entangled(config)
         elif mem_backend == 'multiscale':
-            self.memory = create_multiscale(config)
+            backend = create_multiscale(config)
         else:
-            self.memory = HFFSMemory(
+            backend = HFFSMemory(
                 base_path=config['filepaths']['memory_base'],
                 sponge_size=tuple(config['filepaths']['sponge_size'])
             )
+        # Wrap with policy guard
+        policies = config.get('policies', {})
+        self.policy = PolicyEnforcer(policies)
+        self.memory = GuardedMemory(backend, self.policy)
+
         # Core
         self.spine = NeuralSpine(config)
         self.curiosity = CuriosityEngine(memory=self.memory, threshold=config['training']['threshold'])
