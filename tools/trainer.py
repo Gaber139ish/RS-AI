@@ -20,6 +20,7 @@ from memory.guarded import GuardedMemory
 from tools.policy import PolicyEnforcer
 from memory.auto_memory import AutoMemory
 from spine.auto import AutoSelector
+from spine.gating import ModuleGater
 
 
 class Orchestrator:
@@ -66,8 +67,9 @@ class Orchestrator:
         self.http_server = start_dashboard(host, port, self.metrics, self.bridge)
         self.http_thread = threading.Thread(target=self.http_server.serve_forever, name="Dashboard", daemon=True)
 
-        # Auto selector for modules
+        # Auto selectors/gaters
         self.auto = AutoSelector(self.spine, self.metrics, config)
+        self.gater = ModuleGater(self.spine, explore_prob=float(config.get('auto', {}).get('explore_prob', 0.05)))
 
         # Shared queues
         self.sample_queue: queue.Queue[np.ndarray] = queue.Queue(maxsize=256)
@@ -143,17 +145,13 @@ class Orchestrator:
             if self.pause_event.is_set():
                 time.sleep(0.05)
                 continue
-            # Accumulate into prioritized replay
             try:
                 sample = self.sample_queue.get(timeout=0.1)
-                # Use novelty as priority
                 priority = float(self.curiosity.reward(sample))
                 self.replay.add(sample, priority=priority)
                 self.metrics.inc('replay_size', 1)
             except queue.Empty:
                 pass
-
-            # Train if we have enough data
             if self.replay.size() >= batch_size:
                 batch = self.replay.sample(batch_size)
                 losses = []
@@ -163,14 +161,14 @@ class Orchestrator:
                     losses.append(loss)
                 steps += 1
                 self.metrics.set('trainer_steps', steps)
+                avg_loss = float(np.mean(losses)) if losses else 0.0
+                self.metrics.set('avg_loss', avg_loss)
+                # Use gater to reorder modules on the fly
+                self.gater.step(avg_loss)
                 if time.time() - last_log > 1.0:
-                    avg_loss = float(np.mean(losses)) if losses else 0.0
-                    self.metrics.set('avg_loss', avg_loss)
                     self.logbook.record(f"[{self.ai_name}] Trainer step={steps} avg_loss={avg_loss:.6f}")
                     save_checkpoint(self.spine, self.ckpt_path, extra={"step": steps})
                     last_log = time.time()
-
-        self.stop_event.set()
 
     def _meta_loop(self):
         while not self.stop_event.is_set():
