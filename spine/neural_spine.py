@@ -13,6 +13,7 @@ class NeuralSpine:
         self.config = config
         self.modules: Dict[str, Any] = {}
         self._load_modules()
+        logging.getLogger(__name__).debug("NeuralSpine initialized with modules: %s", list(self.modules.keys()))
 
     def _load_modules(self) -> None:
         for name, path in self.config.get("modules", {}).items():

@@ -1,4 +1,5 @@
 import os
+import logging
 
 try:
     import tomllib as toml_loader  # Python 3.11+
@@ -11,15 +12,19 @@ except Exception:
         return toml_loader.load(path)
 
 from tools.trainer import run_multithreaded_training
+from tools.logging_setup import setup_logging
 
 
 def main():
+    setup_logging()
+    logger = logging.getLogger("train")
     config = load_toml('configs/rs-config.toml')
     os.makedirs('data/logs', exist_ok=True)
     os.makedirs('data/sponge', exist_ok=True)
     os.makedirs('data/checkpoints', exist_ok=True)
 
     runtime = int(config.get('orchestrator', {}).get('runtime_seconds', 8))
+    logger.info("Starting multithreaded training for %ss", runtime)
     run_multithreaded_training(config, duration_seconds=runtime)
 
 
