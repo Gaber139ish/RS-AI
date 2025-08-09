@@ -47,11 +47,27 @@ class Handler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(body)
 
+    def _write_text(self, code: int, body: str):
+        data = body.encode("utf-8")
+        self.send_response(code)
+        self.send_header("Content-Type", "text/plain; version=0.0.4")
+        self.send_header("Content-Length", str(len(data)))
+        self.end_headers()
+        self.wfile.write(data)
+
     def do_GET(self):
         parsed = urlparse(self.path)
         if parsed.path == "/metrics":
             data = self.registry.snapshot()
             self._write_json(200, data)
+            return
+        if parsed.path == "/metrics_prom":
+            snap = self.registry.snapshot()
+            lines = []
+            for k, v in snap.items():
+                if isinstance(v, (int, float)):
+                    lines.append(f"{k} {float(v)}")
+            self._write_text(200, "\n".join(lines) + "\n")
             return
         if parsed.path == "/control":
             qs = parse_qs(parsed.query)
