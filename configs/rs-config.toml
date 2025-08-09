@@ -35,6 +35,7 @@ hopfield_beta = 5.0
 world_lr = 0.001
 ssm_hidden = 256
 ssm_lr = 0.001
+enable_world_model = true
 
 # Memory backend
 [memory]
@@ -90,6 +91,7 @@ runtime_seconds = 8
 [dashboard]
 host = "127.0.0.1"
 port = 8080
+enabled = true
 
 # File and memory settings
 [filepaths]
@@ -97,3 +99,22 @@ logbook      = "data/logs/reflections.md"
 memory_base  = "data/sponge"
 sponge_size  = [27, 27, 27]
 checkpoint   = "data/checkpoints/ckpt.json"
+
+# Optional runtime profiles
+[profiles.low_memory]
+enabled = false
+# Smaller sponge reduces vector dim dramatically (7^3 = 343 vs 27^3 = 19683)
+sponge_size = [7, 7, 7]
+batch_size = 2
+max_steps = 100
+replay_capacity = 200
+ssm_hidden = 64
+clip_norm = 0.5
+memory_backend = "hffs"
+compression_enabled = false
+compression_rank = 4
+dashboard_enabled = false
+enable_world_model = false
+world_lr = 0.0005
+explore_prob = 0.02
+runtime_seconds = 6

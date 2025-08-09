@@ -66,26 +66,32 @@ class Orchestrator:
             capacity=int(config.get('training', {}).get('replay_capacity', 5000)),
             alpha=float(config.get('training', {}).get('replay_alpha', 0.6))
         )
-        # World model for next-step prediction
-        shape = tuple(config['filepaths']['sponge_size'])
-        self.world = WorldModel(dim=int(np.prod(shape)), lr=float(config.get('training', {}).get('world_lr', 1e-3)))
+        # World model for next-step prediction (optional for low-memory)
+        self.world = None
         self._prev_sample = None
+        if bool(config.get('training', {}).get('enable_world_model', True)):
+            shape = tuple(config['filepaths']['sponge_size'])
+            self.world = WorldModel(dim=int(np.prod(shape)), lr=float(config.get('training', {}).get('world_lr', 1e-3)))
 
         # Metrics + Dashboard
         self.metrics = MetricsRegistry()
         self.bridge = ControlBridge()
         self.bridge.set_orchestrator(self)
-        host = config.get('dashboard', {}).get('host', '127.0.0.1')
-        port = int(config.get('dashboard', {}).get('port', 8080))
-        self.http_server = start_dashboard(host, port, self.metrics, self.bridge)
-        self.http_thread = threading.Thread(target=self.http_server.serve_forever, name="Dashboard", daemon=True)
+        self.http_server = None
+        self.http_thread = None
+        if bool(config.get('dashboard', {}).get('enabled', True)):
+            host = config.get('dashboard', {}).get('host', '127.0.0.1')
+            port = int(config.get('dashboard', {}).get('port', 8080))
+            self.http_server = start_dashboard(host, port, self.metrics, self.bridge)
+            self.http_thread = threading.Thread(target=self.http_server.serve_forever, name="Dashboard", daemon=True)
 
         # Auto selectors/gaters
         self.auto = AutoSelector(self.spine, self.metrics, config)
         self.gater = ModuleGater(self.spine, explore_prob=float(config.get('auto', {}).get('explore_prob', 0.05)))
 
         # Shared queues
-        self.sample_queue: queue.Queue[np.ndarray] = queue.Queue(maxsize=256)
+        maxsize = max(32, int(config.get('training', {}).get('replay_capacity', 5000) // 4))
+        self.sample_queue: queue.Queue[np.ndarray] = queue.Queue(maxsize=maxsize)
 
         # Threads
         self.explorer_thread = threading.Thread(target=self._explorer_loop, name="Explorer", daemon=True)
@@ -121,15 +127,17 @@ class Orchestrator:
     def start(self):
         os.makedirs('data/checkpoints', exist_ok=True)
         load_checkpoint(self.spine, self.ckpt_path)
-        self.http_thread.start()
+        if self.http_thread is not None:
+            self.http_thread.start()
         self.explorer_thread.start()
         self.learner_thread.start()
         self.meta_thread.start()
 
     def stop(self):
         self.stop_event.set()
-        self.http_server.shutdown()
-        for t in (self.explorer_thread, self.learner_thread, self.meta_thread, self.http_thread):
+        if self.http_server is not None:
+            self.http_server.shutdown()
+        for t in (self.explorer_thread, self.learner_thread, self.meta_thread, self.http_thread or threading.Thread()):
             t.join(timeout=2.0)
         save_checkpoint(self.spine, self.ckpt_path, extra={"timestamp": time.time()})
 
@@ -178,7 +186,7 @@ class Orchestrator:
                     x = batch[i]
                     loss = self.spine.train_step(x, x)
                     # World model next-step training
-                    if self._prev_sample is not None:
+                    if self._prev_sample is not None and self.world is not None:
                         _ = self.world.train_step(self._prev_sample, x)
                     self._prev_sample = x
                     losses.append(loss)

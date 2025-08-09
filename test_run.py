@@ -3,6 +3,7 @@
 import os
 import time
 import numpy as np
+import logging
 
 try:
     import tomllib as toml_loader  # Python 3.11+
@@ -21,11 +22,17 @@ from tools.reflection_logbook import ReflectionLogbook
 from memory.memory_hffs import HFFSMemory
 from tools.why import WhyEngine
 from tools.policy import PolicyEnforcer
+from tools.logging_setup import setup_logging
+from tools.profiles import apply_low_memory_profile
 
 
 def main():
+    setup_logging()  # honors RS_VERBOSE env
+    logger = logging.getLogger("test_run")
+    logger.info("Starting test_run main()")
     # Load configuration
     config = load_toml('configs/rs-config.toml')
+    config = apply_low_memory_profile(config)
 
     # Prepare directories
     os.makedirs('data/logs', exist_ok=True)
@@ -41,7 +48,9 @@ def main():
         base_path=config['filepaths']['memory_base'],
         sponge_size=tuple(config['filepaths']['sponge_size'])
     )
+    logger.info("Initialized HFFSMemory at %s", config['filepaths']['memory_base'])
     spine = NeuralSpine(config)
+    logger.info("Loaded spine modules: %s", list(spine.modules.keys()))
     curiosity = CuriosityEngine(
         memory=memory,
         threshold=config['training']['threshold']
@@ -58,6 +67,8 @@ def main():
     for step in range(train_steps):
         loss = spine.train_step(flat, flat)
         last_loss = loss
+        if step % 10 == 0:
+            logger.debug("warmup step=%d loss=%.6f", step, loss)
     if last_loss is not None:
         print(f"[⚙] Training complete. Final loss={last_loss:.6f}")
 
