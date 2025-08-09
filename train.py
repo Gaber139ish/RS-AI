@@ -13,12 +13,14 @@ except Exception:
 
 from tools.trainer import run_multithreaded_training
 from tools.logging_setup import setup_logging
+from tools.profiles import apply_low_memory_profile
 
 
 def main():
     setup_logging()
     logger = logging.getLogger("train")
     config = load_toml('configs/rs-config.toml')
+    config = apply_low_memory_profile(config)
     os.makedirs('data/logs', exist_ok=True)
     os.makedirs('data/sponge', exist_ok=True)
     os.makedirs('data/checkpoints', exist_ok=True)

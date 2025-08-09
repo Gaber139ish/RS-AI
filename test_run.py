@@ -23,6 +23,7 @@ from memory.memory_hffs import HFFSMemory
 from tools.why import WhyEngine
 from tools.policy import PolicyEnforcer
 from tools.logging_setup import setup_logging
+from tools.profiles import apply_low_memory_profile
 
 
 def main():
@@ -31,6 +32,7 @@ def main():
     logger.info("Starting test_run main()")
     # Load configuration
     config = load_toml('configs/rs-config.toml')
+    config = apply_low_memory_profile(config)
 
     # Prepare directories
     os.makedirs('data/logs', exist_ok=True)
