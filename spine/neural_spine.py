@@ -47,6 +47,13 @@ class NeuralSpine:
         """Remove an existing module"""
         self.modules.pop(name, None)
 
+    def prioritize(self, name: str) -> None:
+        if name not in self.modules:
+            return
+        # Reinsert module at the beginning to process first
+        module = self.modules.pop(name)
+        self.modules = {name: module, **self.modules}
+
     def train_step(self, inputs, targets) -> float:
         """Run a single training step across modules that implement 'train_step'.
         Returns the average loss across participating modules.

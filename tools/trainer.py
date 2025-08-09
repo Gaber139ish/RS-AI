@@ -18,6 +18,8 @@ from memory.sponge_memory import create as create_entangled
 from memory.multiscale import create_multiscale
 from memory.guarded import GuardedMemory
 from tools.policy import PolicyEnforcer
+from memory.auto_memory import AutoMemory
+from spine.auto import AutoSelector
 
 
 class Orchestrator:
@@ -34,12 +36,14 @@ class Orchestrator:
             backend = create_entangled(config)
         elif mem_backend == 'multiscale':
             backend = create_multiscale(config)
+        elif mem_backend == 'auto':
+            backends = [HFFSMemory(config['filepaths']['memory_base'], tuple(config['filepaths']['sponge_size'])), create_entangled(config)]
+            backend = AutoMemory(backends)
         else:
             backend = HFFSMemory(
                 base_path=config['filepaths']['memory_base'],
                 sponge_size=tuple(config['filepaths']['sponge_size'])
             )
-        # Wrap with policy guard
         policies = config.get('policies', {})
         self.policy = PolicyEnforcer(policies)
         self.memory = GuardedMemory(backend, self.policy)
@@ -61,6 +65,9 @@ class Orchestrator:
         port = int(config.get('dashboard', {}).get('port', 8080))
         self.http_server = start_dashboard(host, port, self.metrics, self.bridge)
         self.http_thread = threading.Thread(target=self.http_server.serve_forever, name="Dashboard", daemon=True)
+
+        # Auto selector for modules
+        self.auto = AutoSelector(self.spine, self.metrics, config)
 
         # Shared queues
         self.sample_queue: queue.Queue[np.ndarray] = queue.Queue(maxsize=256)
@@ -176,6 +183,8 @@ class Orchestrator:
                     module.lr = max(1e-5, float(module.lr) * 0.999)
             self.logbook.record(f"[{self.ai_name}] Meta report: {report}")
             self.metrics.set('meta_last_report_ok', True)
+            # Auto module selection based on metrics
+            self.auto.maybe_switch()
             time.sleep(2.0)
 
 

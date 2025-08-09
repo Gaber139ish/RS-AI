@@ -9,17 +9,28 @@ class HopfieldModule:
         self.slots = int(slots)
         self.beta = float(beta)
         self.memory = rng.normal(0, 0.1, size=(self.slots, self.dim)).astype(np.float32)
+        self._renorm_memory()
+
+    def _renorm_memory(self):
+        norms = np.linalg.norm(self.memory, axis=1, keepdims=True) + 1e-6
+        self.memory = (self.memory / norms).astype(np.float32)
 
     def process(self, x):
         v = np.asarray(x, dtype=np.float32).reshape(-1)
         v = v[: self.dim] if v.shape[0] >= self.dim else np.pad(v, (0, self.dim - v.shape[0]))
-        # Attention-like retrieval
-        scores = (self.memory @ v) / (np.linalg.norm(v) + 1e-6)
-        attn = np.exp(self.beta * scores)
-        attn = attn / (attn.sum() + 1e-9)
+        v_norm = np.linalg.norm(v) + 1e-6
+        # Stable attention scores
+        scores = (self.memory @ v) / v_norm
+        scores = scores - float(scores.max())
+        attn = np.exp(np.clip(self.beta * scores, -50.0, 50.0))
+        denom = attn.sum() + 1e-9
+        attn = attn / denom
+        if not np.isfinite(attn).all():
+            attn = np.ones_like(attn) / attn.size
         y = (attn[:, None] * self.memory).sum(axis=0)
-        # Hebbian write-back (fast weights)
-        self.memory = 0.99 * self.memory + 0.01 * np.outer(attn, v)
+        # Hebbian write-back (fast weights) with small step
+        self.memory = 0.999 * self.memory + 0.001 * np.outer(attn, v / v_norm)
+        self._renorm_memory()
         return y.astype(np.float32)
 
     def train_step(self, inputs, targets) -> float:
@@ -33,7 +44,9 @@ class HopfieldModule:
 def create(config: Dict[str, Any] | None = None) -> HopfieldModule:
     if config is None:
         shape = (27, 27, 27)
+        beta = 5.0
     else:
         shape = tuple(config.get('filepaths', {}).get('sponge_size', [27, 27, 27]))
+        beta = float(config.get('training', {}).get('hopfield_beta', 5.0))
     dim = int(np.prod(shape))
-    return HopfieldModule(dim=dim)
+    return HopfieldModule(dim=dim, beta=beta)
