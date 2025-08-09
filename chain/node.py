@@ -18,6 +18,8 @@ from spine.neural_spine import NeuralSpine
 from spine.curiosity_engine import CuriosityEngine
 from memory.sponge_memory import create as create_entangled
 from memory.memory_hffs import HFFSMemory
+from tools.policy import PolicyEnforcer
+from tools.why import WhyEngine
 
 
 class Node:
@@ -45,6 +47,9 @@ class Node:
             )
         self.curiosity = CuriosityEngine(memory=self.memory, threshold=config['training']['threshold'])
         self.contracts = ContractEngine.from_config(config.get('contracts', {}))
+        self.policies = config.get('policies', {})
+        self.policy = PolicyEnforcer(self.policies)
+        self.why = WhyEngine(self.policies)
         self._stop = threading.Event()
 
     def train_and_score(self, steps: int = 20) -> Tuple[float, Dict[str, Any]]:
@@ -99,11 +104,9 @@ class FederatedChain:
         commit_idx_local = bft_commit(committee_blocks, quorum=max(1, len(committee) // 2 + 1))
         if commit_idx_local < 0:
             return {"status": "no_commit"}
-        # Map to global index
         commit_idx = committee[commit_idx_local]
         blk, pub = proposals[commit_idx]
         if not verify_block(blk):
-            # Slash proposer
             frac = slash_fraction('invalid_hash')
             for n in self.nodes:
                 if n.node_id == blk.proposer:
@@ -112,7 +115,7 @@ class FederatedChain:
                     self.state.apply_slash(n.node_id, frac)
                     break
             return {"status": "reject", "reason": "invalid_hash"}
-        # Smart contracts
+        # Smart contracts + policy checks
         context = {
             "metrics": {
                 "ai_score": blk.ai_score,
@@ -124,15 +127,20 @@ class FederatedChain:
         for act in actions:
             if act['type'] == 'mint':
                 to = act.get('to', blk.proposer)
-                for n in self.nodes:
-                    if n.node_id == to:
-                        n.wallet.deposit(float(act['amount']))
+                allowed, msg = self.nodes[0].policy.check('mint', {"amount": act.get('amount', 0.0)})
+                if allowed:
+                    for n in self.nodes:
+                        if n.node_id == to:
+                            n.wallet.deposit(float(act['amount']))
+                    self.nodes[0].why.record(None, self.nodes[0].why.reason_for('mint', {"objective": "incentivize useful work"}))
             elif act['type'] == 'transfer':
                 frm = act.get('from'); to = act.get('to'); amt = float(act.get('amount', 0.0))
-                src = next((n for n in self.nodes if n.node_id == frm), None)
-                dst = next((n for n in self.nodes if n.node_id == to), None)
-                if src and dst:
-                    src.wallet.transfer_to(dst.wallet, amt)
+                allowed, msg = self.nodes[0].policy.check('transfer_funds', {"amount": amt})
+                if allowed:
+                    src = next((n for n in self.nodes if n.node_id == frm), None)
+                    dst = next((n for n in self.nodes if n.node_id == to), None)
+                    if src and dst:
+                        src.wallet.transfer_to(dst.wallet, amt)
         # PoS mint to winner
         winner_idx = commit_idx
         reward = mint_reward(blk.ai_score, base_reward=self.base_reward)

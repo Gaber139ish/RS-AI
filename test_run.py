@@ -19,6 +19,8 @@ from spine.curiosity_engine import CuriosityEngine
 from spine.introspection import Introspection
 from tools.reflection_logbook import ReflectionLogbook
 from memory.memory_hffs import HFFSMemory
+from tools.why import WhyEngine
+from tools.policy import PolicyEnforcer
 
 
 def main():
@@ -31,6 +33,10 @@ def main():
 
     # Initialize subsystems
     logbook = ReflectionLogbook(config['filepaths']['logbook'])
+    policies = config.get('policies', {})
+    why = WhyEngine(policies)
+    policy = PolicyEnforcer(policies)
+
     memory = HFFSMemory(
         base_path=config['filepaths']['memory_base'],
         sponge_size=tuple(config['filepaths']['sponge_size'])
@@ -40,7 +46,7 @@ def main():
         memory=memory,
         threshold=config['training']['threshold']
     )
-    introspect = Introspection(spine=spine, logbook=logbook)
+    introspect = Introspection(spine=spine, logbook=logbook, policies=policies)
 
     # Dummy input vector
     vec = np.random.rand(*memory.sponge_size)
@@ -59,10 +65,16 @@ def main():
     output = spine.forward(flat)
     print(f"[+] Spine output vector of length {len(output)}")
 
-    # 2) Store output in memory
+    # 2) Store output in memory with policy/why
     key = f"state_{int(time.time())}"
-    memory.store(key, output)
-    print(f"[+] Stored state as '{key}'")
+    allowed, msg = policy.check('store_memory', {"contains_sensitive": False})
+    if allowed:
+        memory.store(key, output)
+        why.record(logbook, why.reason_for('store_memory', {"objective": "retain state for future recall"}))
+        print(f"[+] Stored state as '{key}'")
+    else:
+        why.record(logbook, f"Blocked store_memory: {msg}")
+        print(f"[!] Blocked storing state '{key}': {msg}")
 
     # 3) Introspection report
     report = introspect.assess(flat, flat)
