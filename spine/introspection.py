@@ -5,10 +5,16 @@ import logging
 
 logger = logging.getLogger(__name__)
 
+from tools.why import WhyEngine
+from tools.policy import PolicyEnforcer
+
+
 class Introspection:
-    def __init__(self, spine=None, logbook=None):
+    def __init__(self, spine=None, logbook=None, policies=None):
         self.spine = spine
         self.logbook = logbook
+        self.why = WhyEngine(policies or {})
+        self.policy = PolicyEnforcer(policies or {})
 
     def process(self, x):
         # Just pass through
@@ -26,13 +32,16 @@ class Introspection:
         for name, module in (self.spine.modules.items() if self.spine else []):
             try:
                 out = module.process(x)
-                loss = module.evaluate(out, targets)
+                loss = module.evaluate(out, targets) if hasattr(module, 'evaluate') else 0.0
                 report[name] = float(loss)
                 x = out
             except Exception:
                 report[name] = None
         if self.logbook:
             self.logbook.record_introspection(report)
+        # Metacognition: explain why we assessed
+        reason = self.why.reason_for('introspection_assess', {"objective": "monitor performance and enforce policies"})
+        self.why.record(self.logbook, reason)
         return report
 
 class Introspector:
@@ -45,4 +54,5 @@ class Introspector:
 
 # Factory for plugin system
 def create(config=None):
-    return Introspection()
+    policies = (config or {}).get('policies', {}) if isinstance(config, dict) else {}
+    return Introspection(policies=policies)

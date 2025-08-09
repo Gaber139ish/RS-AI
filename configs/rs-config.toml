@@ -12,6 +12,13 @@ token_symbol = "RSAI"
 token_name = "RS-AI Coin"
 legal_owner = "Gabriel Neal Christensen"
 
+# Policies
+[policies]
+ethics = "Do no harm, maximize beneficial impact, comply with laws"
+privacy = "Protect user and data privacy; avoid storing sensitive data"
+security = "Integrity, least privilege, resilience; secure defaults"
+max_transfer = 1000.0
+
 # Training hyperparameters
 [training]
 inner_lr = 0.01
