@@ -1,6 +1,8 @@
 # Core module mappings
 [modules]
 dense         = "spine.modules.dense"
+# To enable PyTorch MLP instead, uncomment the following and comment out 'dense'
+# torch_mlp     = "spine.modules.torch_mlp"
 introspection = "spine.introspection"
 
 # Training hyperparameters
@@ -11,12 +13,21 @@ threshold = 0.1
 batch_size = 8
 max_steps = 500
 replay_capacity = 5000
+replay_alpha = 0.6
 momentum = 0.9
 clip_norm = 1.0
+# Torch module params (used if torch_mlp enabled)
+torch_lr = 0.001
+torch_hidden = 128
 
 # Orchestration
 [orchestrator]
 runtime_seconds = 8
+
+# Dashboard
+[dashboard]
+host = "127.0.0.1"
+port = 8080
 
 # File and memory settings
 [filepaths]

@@ -95,3 +95,27 @@ Trainer step=383 avg_loss=0.001099
 ## [2025-08-09T01:42:46.395498]
 Trainer step=481 avg_loss=0.001096
 
+## [2025-08-09T01:46:03.849690]
+Introspection Report:
+- **dense**: no data
+- **introspection**: loss=0.0
+
+
+## [2025-08-09T01:46:03.849825]
+Meta report: {'dense': None, 'introspection': 0.0}
+
+## [2025-08-09T01:46:04.853585]
+Trainer step=177 avg_loss=0.001091
+
+## [2025-08-09T01:46:05.850325]
+Introspection Report:
+- **dense**: no data
+- **introspection**: loss=0.0
+
+
+## [2025-08-09T01:46:05.850408]
+Meta report: {'dense': None, 'introspection': 0.0}
+
+## [2025-08-09T01:46:05.891512]
+Trainer step=364 avg_loss=0.001095
+
