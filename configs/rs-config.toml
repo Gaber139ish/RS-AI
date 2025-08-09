@@ -8,9 +8,19 @@ introspection = "spine.introspection"
 inner_lr = 0.01
 outer_lr = 0.001
 threshold = 0.1
+batch_size = 8
+max_steps = 500
+replay_capacity = 5000
+momentum = 0.9
+clip_norm = 1.0
+
+# Orchestration
+[orchestrator]
+runtime_seconds = 8
 
 # File and memory settings
 [filepaths]
 logbook      = "data/logs/reflections.md"
 memory_base  = "data/sponge"
 sponge_size  = [27, 27, 27]
+checkpoint   = "data/checkpoints/ckpt.json"
