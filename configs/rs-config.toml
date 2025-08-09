@@ -1,0 +1,99 @@
+# Core module mappings
+[modules]
+hopfield      = "spine.modules.hopfield"
+hrr           = "spine.modules.hrr"
+ssm           = "spine.modules.ssm"
+world_model   = "spine.world_model"
+introspection = "spine.introspection"
+
+# Branding
+[branding]
+ai_name = "RS-AI"
+token_symbol = "RSAI"
+token_name = "RS-AI Coin"
+legal_owner = "Gabriel Neal Christensen"
+
+# Policies
+[policies]
+ethics = "Do no harm, maximize beneficial impact, comply with laws"
+privacy = "Protect user and data privacy; avoid storing sensitive data"
+security = "Integrity, least privilege, resilience; secure defaults"
+max_transfer = 1000.0
+
+# Training hyperparameters
+[training]
+inner_lr = 0.01
+outer_lr = 0.001
+threshold = 0.1
+batch_size = 8
+max_steps = 500
+replay_capacity = 5000
+replay_alpha = 0.6
+momentum = 0.9
+clip_norm = 1.0
+hopfield_beta = 5.0
+world_lr = 0.001
+ssm_hidden = 256
+ssm_lr = 0.001
+
+# Memory backend
+[memory]
+backend = "auto"  # options: hffs, entangled, multiscale, auto
+block_size = [9, 9, 9]
+entanglement_strength = 0.15
+neighbor_radius = 1
+holographic_dim = 1024
+hebbian = true
+hebbian_lr = 0.001
+hebbian_decay = 0.995
+
+# Compression
+[compression]
+enabled = true
+rank = 8
+
+# Auto control
+[auto]
+cooldown_s = 5.0
+explore_prob = 0.10
+
+# ZKML
+[zkml]
+enabled = true
+
+# TEE
+[tee]
+attest = true
+
+# Contracts
+[contracts]
+contracts = [
+  { kind = "mint_if_metric", params = { metric = "ai_score", threshold = 0.6, amount = 0.25 } },
+]
+
+# Chain configuration
+[chain]
+num_nodes = 3
+rounds = 5
+round_time = 1.0
+base_reward = 1.0
+initial_balance = 10.0
+initial_stake = 5.0
+train_steps = 15
+auction_reward = 0.25
+
+# Orchestration
+[orchestrator]
+runtime_seconds = 8
+
+# Dashboard
+[dashboard]
+host = "127.0.0.1"
+port = 8080
+
+# File and memory settings
+[filepaths]
+logbook      = "data/logs/reflections.md"
+memory_base  = "data/sponge"
+sponge_size  = [27, 27, 27]
+checkpoint   = "data/checkpoints/ckpt.json"
