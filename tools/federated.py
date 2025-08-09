@@ -21,6 +21,8 @@ def main():
     rounds = int(config.get('chain', {}).get('rounds', 5))
     fc = FederatedChain(config, base_dir=base, num_nodes=num_nodes)
     fc.run(rounds=rounds)
+    token = config.get('branding', {}).get('token_name', 'RS-AI Coin')
+    print(f"Federated run complete: {rounds} rounds with {num_nodes} nodes; rewards paid in {token}.")
 
 
 if __name__ == '__main__':

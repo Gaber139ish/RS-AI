@@ -5,6 +5,12 @@ dense         = "spine.modules.dense"
 # torch_mlp     = "spine.modules.torch_mlp"
 introspection = "spine.introspection"
 
+# Branding
+[branding]
+ai_name = "RS-AI"
+token_symbol = "RSAI"
+token_name = "RS-AI Coin"
+
 # Training hyperparameters
 [training]
 inner_lr = 0.01

@@ -22,6 +22,7 @@ class Orchestrator:
         self.config = config
         self.stop_event = threading.Event()
         self.pause_event = threading.Event()  # when set, training pauses
+        self.ai_name = config.get('branding', {}).get('ai_name', 'RS-AI')
 
         # IO
         self.logbook = ReflectionLogbook(config['filepaths']['logbook'])
@@ -148,7 +149,7 @@ class Orchestrator:
                 if time.time() - last_log > 1.0:
                     avg_loss = float(np.mean(losses)) if losses else 0.0
                     self.metrics.set('avg_loss', avg_loss)
-                    self.logbook.record(f"Trainer step={steps} avg_loss={avg_loss:.6f}")
+                    self.logbook.record(f"[{self.ai_name}] Trainer step={steps} avg_loss={avg_loss:.6f}")
                     save_checkpoint(self.spine, self.ckpt_path, extra={"step": steps})
                     last_log = time.time()
 
@@ -163,7 +164,7 @@ class Orchestrator:
             for module in self.spine.modules.values():
                 if hasattr(module, 'lr'):
                     module.lr = max(1e-5, float(module.lr) * 0.999)
-            self.logbook.record(f"Meta report: {report}")
+            self.logbook.record(f"[{self.ai_name}] Meta report: {report}")
             self.metrics.set('meta_last_report_ok', True)
             time.sleep(2.0)
 
