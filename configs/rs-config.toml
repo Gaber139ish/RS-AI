@@ -35,6 +35,12 @@ entanglement_strength = 0.15
 neighbor_radius = 1
 holographic_dim = 1024
 
+# Contracts
+[contracts]
+contracts = [
+  { kind = "mint_if_metric", params = { metric = "ai_score", threshold = 0.6, amount = 0.25 } },
+]
+
 # Chain configuration
 [chain]
 num_nodes = 3

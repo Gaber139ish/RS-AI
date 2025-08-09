@@ -10,6 +10,9 @@ from chain.wallet import Wallet
 from chain.block import Block, Transaction
 from chain.ledger import Ledger
 from chain.consensus import select_winner, verify_block, mint_reward
+from chain.consensus_bft import bft_commit
+from chain.contracts import ContractEngine
+from chain.p2p import InProcBus
 from spine.neural_spine import NeuralSpine
 from spine.curiosity_engine import CuriosityEngine
 from memory.sponge_memory import create as create_entangled
@@ -17,6 +20,8 @@ from memory.memory_hffs import HFFSMemory
 
 
 class Node:
+    BUS = InProcBus()  # simple shared bus for simulation
+
     def __init__(self, config: Dict[str, Any], node_dir: str):
         self.config = config
         self.node_dir = node_dir
@@ -38,6 +43,7 @@ class Node:
                 sponge_size=tuple(config['filepaths']['sponge_size'])
             )
         self.curiosity = CuriosityEngine(memory=self.memory, threshold=config['training']['threshold'])
+        self.contracts = ContractEngine.from_config(config.get('contracts', {}))
         self._stop = threading.Event()
 
     def train_and_score(self, steps: int = 20) -> Tuple[float, Dict[str, Any]]:
@@ -46,7 +52,6 @@ class Node:
         last = None
         for _ in range(steps):
             last = self.spine.train_step(x, x)
-        # AI score: inverse of loss with logistic squashing
         loss = float(last or 1.0)
         ai_score = 1.0 / (1.0 + np.exp(5.0 * (loss - 0.01)))
         return float(ai_score), {"loss": loss}
@@ -84,16 +89,42 @@ class FederatedChain:
         for node in self.nodes:
             blk = node.propose_block(self.ledger)
             proposals.append((blk, node.pub))
-        winner_idx = select_winner(proposals)
-        blk, pub = proposals[winner_idx]
-        # Verify and append
+        # BFT commit (simulated majority)
+        quorum = max(1, len(self.nodes) // 2 + 1)
+        commit_idx = bft_commit(proposals, quorum=quorum)
+        if commit_idx < 0:
+            return {"status": "no_commit"}
+        blk, pub = proposals[commit_idx]
         if not verify_block(blk):
             return {"status": "reject", "reason": "invalid_hash"}
-        # Reward: mint to winner wallet
+        # Smart contracts
+        context = {
+            "metrics": {
+                "ai_score": blk.ai_score,
+                "stake": blk.stake,
+            },
+            "proposer": blk.proposer,
+        }
+        actions = self.nodes[0].contracts.evaluate(context) if self.nodes else []
+        for act in actions:
+            if act['type'] == 'mint':
+                # Mint to proposer or specific address
+                to = act.get('to', blk.proposer)
+                for n in self.nodes:
+                    if n.node_id == to:
+                        n.wallet.deposit(float(act['amount']))
+            elif act['type'] == 'transfer':
+                frm = act.get('from'); to = act.get('to'); amt = float(act.get('amount', 0.0))
+                src = next((n for n in self.nodes if n.node_id == frm), None)
+                dst = next((n for n in self.nodes if n.node_id == to), None)
+                if src and dst:
+                    src.wallet.transfer_to(dst.wallet, amt)
+        # PoS mint to winner
+        winner_idx = commit_idx
         reward = mint_reward(blk.ai_score, base_reward=self.base_reward)
         self.nodes[winner_idx].wallet.deposit(reward)
         appended = self.ledger.append(blk)
-        return {"status": "ok" if appended else "reject", "winner": blk.proposer, "reward": reward, "height": self.ledger.height()}
+        return {"status": "ok" if appended else "reject", "winner": blk.proposer, "reward": reward, "height": self.ledger.height(), "actions": actions}
 
     def run(self, rounds: int = 5) -> None:
         for _ in range(rounds):
