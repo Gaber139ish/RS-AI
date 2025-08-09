@@ -21,6 +21,10 @@ from tools.policy import PolicyEnforcer
 from memory.auto_memory import AutoMemory
 from spine.auto import AutoSelector
 from spine.gating import ModuleGater
+from memory.tensor_network import TensorNetworkCompressor
+from spine.world_model import WorldModel
+from tools.zkml import generate_proof, verify_proof
+from tools.tee import attest_run
 
 
 class Orchestrator:
@@ -45,6 +49,11 @@ class Orchestrator:
                 base_path=config['filepaths']['memory_base'],
                 sponge_size=tuple(config['filepaths']['sponge_size'])
             )
+        # Optional tensor compression layer
+        if bool(config.get('compression', {}).get('enabled', False)):
+            rank = int(config.get('compression', {}).get('rank', 8))
+            backend = TensorNetworkCompressor(backend, rank=rank)
+        # Wrap with policy guard
         policies = config.get('policies', {})
         self.policy = PolicyEnforcer(policies)
         self.memory = GuardedMemory(backend, self.policy)
@@ -57,6 +66,10 @@ class Orchestrator:
             capacity=int(config.get('training', {}).get('replay_capacity', 5000)),
             alpha=float(config.get('training', {}).get('replay_alpha', 0.6))
         )
+        # World model for next-step prediction
+        shape = tuple(config['filepaths']['sponge_size'])
+        self.world = WorldModel(dim=int(np.prod(shape)), lr=float(config.get('training', {}).get('world_lr', 1e-3)))
+        self._prev_sample = None
 
         # Metrics + Dashboard
         self.metrics = MetricsRegistry()
@@ -81,6 +94,11 @@ class Orchestrator:
 
         # Checkpoint
         self.ckpt_path = self.config.get('filepaths', {}).get('checkpoint', 'data/checkpoints/ckpt.json')
+
+        # TEE attestation of run params (stub)
+        if bool(config.get('tee', {}).get('attest', False)):
+            att = attest_run({"ai_name": self.ai_name, "memory": mem_backend})
+            self.logbook.record(f"TEE Attestation: {att['attestation']}")
 
     # Control API
     def pause(self):
@@ -141,6 +159,7 @@ class Orchestrator:
         train_steps = int(self.config.get('training', {}).get('max_steps', 500))
         steps = 0
         last_log = time.time()
+        last_proof_loss = None
         while not self.stop_event.is_set() and steps < train_steps:
             if self.pause_event.is_set():
                 time.sleep(0.05)
@@ -158,6 +177,10 @@ class Orchestrator:
                 for i in range(batch.shape[0]):
                     x = batch[i]
                     loss = self.spine.train_step(x, x)
+                    # World model next-step training
+                    if self._prev_sample is not None:
+                        _ = self.world.train_step(self._prev_sample, x)
+                    self._prev_sample = x
                     losses.append(loss)
                 steps += 1
                 self.metrics.set('trainer_steps', steps)
@@ -165,6 +188,13 @@ class Orchestrator:
                 self.metrics.set('avg_loss', avg_loss)
                 # Use gater to reorder modules on the fly
                 self.gater.step(avg_loss)
+                # ZKML proof of improvement (stub)
+                if last_proof_loss is not None and bool(self.config.get('zkml', {}).get('enabled', False)):
+                    proof = generate_proof(last_proof_loss, avg_loss, {"step": steps})
+                    ok = verify_proof(proof)
+                    if ok:
+                        self.logbook.record(f"ZKML: loss {last_proof_loss:.6f} -> {avg_loss:.6f} proof_ok")
+                last_proof_loss = avg_loss
                 if time.time() - last_log > 1.0:
                     self.logbook.record(f"[{self.ai_name}] Trainer step={steps} avg_loss={avg_loss:.6f}")
                     save_checkpoint(self.spine, self.ckpt_path, extra={"step": steps})

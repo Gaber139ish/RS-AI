@@ -20,6 +20,10 @@ from memory.sponge_memory import create as create_entangled
 from memory.memory_hffs import HFFSMemory
 from tools.policy import PolicyEnforcer
 from tools.why import WhyEngine
+from chain.auction import JobAuction
+from chain.oracles import red_team_oracle, eval_oracle
+from chain.federated_dp import aggregate_metrics
+from tools.zkml import generate_proof, verify_proof
 
 
 class Node:
@@ -51,6 +55,7 @@ class Node:
         self.policy = PolicyEnforcer(self.policies)
         self.why = WhyEngine(self.policies)
         self._stop = threading.Event()
+        self._last_proposer_loss = None
 
     def train_and_score(self, steps: int = 20) -> Tuple[float, Dict[str, Any]]:
         shape = tuple(self.memory.sponge_size)
@@ -77,6 +82,12 @@ class Node:
         )
         blk.signature_hex = sign(self.secret, blk.compute_hash().encode('utf-8')).hex()
         blk.hash_hex = blk.compute_hash()
+        # Record proposer proof-of-improvement if applicable
+        if self._last_proposer_loss is not None and bool(self.config.get('zkml', {}).get('enabled', False)):
+            proof = generate_proof(self._last_proposer_loss, float(info.get('loss', 1.0)), {"proposer": self.node_id})
+            if verify_proof(proof):
+                txs.append(Transaction(kind="zkml", data=proof))
+        self._last_proposer_loss = float(info.get('loss', 1.0))
         return blk
 
 
@@ -92,13 +103,13 @@ class FederatedChain:
         self.state = ChainState()
         for n in self.nodes:
             self.state.set_stake(n.node_id, n.wallet.staked())
+        self.auction = JobAuction(base_reward=float(config.get('chain', {}).get('auction_reward', 0.25)))
 
     def run_round(self) -> Dict[str, Any]:
         proposals: List[Tuple[Block, bytes]] = []
         for node in self.nodes:
             blk = node.propose_block(self.ledger)
             proposals.append((blk, node.pub))
-        # Committee sampling (weighted)
         committee = select_committee(proposals, k=max(1, len(self.nodes) // 2 + 1))
         committee_blocks = [proposals[i] for i in committee]
         commit_idx_local = bft_commit(committee_blocks, quorum=max(1, len(committee) // 2 + 1))
@@ -115,14 +126,19 @@ class FederatedChain:
                     self.state.apply_slash(n.node_id, frac)
                     break
             return {"status": "reject", "reason": "invalid_hash"}
-        # Smart contracts + policy checks
-        context = {
-            "metrics": {
-                "ai_score": blk.ai_score,
-                "stake": blk.stake,
-            },
-            "proposer": blk.proposer,
-        }
+        # Oracles and PoUW auction
+        evals = eval_oracle({"ai_score": blk.ai_score, "stake": blk.stake})
+        bidders = [{"id": n.node_id, "stake": n.wallet.staked(), "ai_score": blk.ai_score} for n in self.nodes]
+        auction_res = self.auction.run(bidders, job={"intent": "useful_training"})
+        if auction_res.get('winner'):
+            win_id = auction_res['winner']['id']
+            for n in self.nodes:
+                if n.node_id == win_id:
+                    n.wallet.deposit(auction_res['payout'])
+        # DP aggregation of proposer loss (demo)
+        dp_metrics = aggregate_metrics([{"loss": tx.data.get('info', {}).get('loss', 0.0)} for tx in blk.txs if tx.kind == 'train'])
+        # Contracts + policy checks
+        context = {"metrics": {"ai_score": blk.ai_score, "stake": blk.stake}, "proposer": blk.proposer}
         actions = self.nodes[0].contracts.evaluate(context) if self.nodes else []
         for act in actions:
             if act['type'] == 'mint':
@@ -132,7 +148,6 @@ class FederatedChain:
                     for n in self.nodes:
                         if n.node_id == to:
                             n.wallet.deposit(float(act['amount']))
-                    self.nodes[0].why.record(None, self.nodes[0].why.reason_for('mint', {"objective": "incentivize useful work"}))
             elif act['type'] == 'transfer':
                 frm = act.get('from'); to = act.get('to'); amt = float(act.get('amount', 0.0))
                 allowed, msg = self.nodes[0].policy.check('transfer_funds', {"amount": amt})
@@ -141,13 +156,12 @@ class FederatedChain:
                     dst = next((n for n in self.nodes if n.node_id == to), None)
                     if src and dst:
                         src.wallet.transfer_to(dst.wallet, amt)
-        # PoS mint to winner
         winner_idx = commit_idx
         reward = mint_reward(blk.ai_score, base_reward=self.base_reward)
         self.nodes[winner_idx].wallet.deposit(reward)
         self.state.set_stake(self.nodes[winner_idx].node_id, self.nodes[winner_idx].wallet.staked())
         appended = self.ledger.append(blk)
-        return {"status": "ok" if appended else "reject", "winner": blk.proposer, "reward": reward, "height": self.ledger.height(), "actions": actions, "committee": committee}
+        return {"status": "ok" if appended else "reject", "winner": blk.proposer, "reward": reward, "height": self.ledger.height(), "actions": actions, "committee": committee, "auction": auction_res, "dp": dp_metrics}
 
     def run(self, rounds: int = 5) -> None:
         for _ in range(rounds):
