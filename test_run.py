@@ -3,7 +3,16 @@
 import os
 import time
 import numpy as np
-import toml
+
+try:
+    import tomllib as toml_loader  # Python 3.11+
+    def load_toml(path):
+        with open(path, 'rb') as f:
+            return toml_loader.load(f)
+except Exception:
+    import toml as toml_loader  # type: ignore
+    def load_toml(path):
+        return toml_loader.load(path)
 
 from spine.neural_spine import NeuralSpine
 from spine.curiosity_engine import CuriosityEngine
@@ -14,7 +23,7 @@ from memory.memory_hffs import HFFSMemory
 
 def main():
     # Load configuration
-    config = toml.load('configs/rs-config.toml')
+    config = load_toml('configs/rs-config.toml')
 
     # Prepare directories
     os.makedirs('data/logs', exist_ok=True)
@@ -36,6 +45,15 @@ def main():
     # Dummy input vector
     vec = np.random.rand(*memory.sponge_size)
     flat = vec.flatten()
+
+    # Optional: brief training to reconstruct input
+    train_steps = 50
+    last_loss = None
+    for step in range(train_steps):
+        loss = spine.train_step(flat, flat)
+        last_loss = loss
+    if last_loss is not None:
+        print(f"[⚙] Training complete. Final loss={last_loss:.6f}")
 
     # 1) Forward pass through spine
     output = spine.forward(flat)

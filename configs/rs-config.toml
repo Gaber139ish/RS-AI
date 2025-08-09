@@ -1,7 +1,6 @@
 # Core module mappings
 [modules]
-meta_trainer = "spine.meta_trainer"
-curiosity     = "spine.curiosity_engine"
+dense         = "spine.modules.dense"
 introspection = "spine.introspection"
 
 # Training hyperparameters
