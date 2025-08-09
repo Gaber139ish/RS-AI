@@ -20,6 +20,14 @@ clip_norm = 1.0
 torch_lr = 0.001
 torch_hidden = 128
 
+# Memory backend
+[memory]
+backend = "entangled"  # options: hffs, entangled
+block_size = [9, 9, 9]
+entanglement_strength = 0.15
+neighbor_radius = 1
+holographic_dim = 1024
+
 # Orchestration
 [orchestrator]
 runtime_seconds = 8

@@ -119,3 +119,16 @@ Meta report: {'dense': None, 'introspection': 0.0}
 ## [2025-08-09T01:46:05.891512]
 Trainer step=364 avg_loss=0.001095
 
+## [2025-08-09T01:57:29.194560]
+Introspection Report:
+- **dense**: no data
+- **introspection**: loss=0.0
+
+
+## [2025-08-09T01:57:29.195031]
+**Run summary**
+- Stored key: `state_1754704649`
+- Novelty reward: `0.4750`
+- Module losses: `{'dense': None, 'introspection': 0.0}`
+
+

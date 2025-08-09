@@ -14,6 +14,7 @@ from memory.prioritized_replay import PrioritizedReplayBuffer
 from tools.reflection_logbook import ReflectionLogbook
 from tools.metrics import MetricsRegistry
 from tools.dashboard import start_dashboard, ControlBridge
+from memory.sponge_memory import create as create_entangled
 
 
 class Orchestrator:
@@ -24,10 +25,14 @@ class Orchestrator:
 
         # IO
         self.logbook = ReflectionLogbook(config['filepaths']['logbook'])
-        self.memory = HFFSMemory(
-            base_path=config['filepaths']['memory_base'],
-            sponge_size=tuple(config['filepaths']['sponge_size'])
-        )
+        mem_backend = (config.get('memory', {}).get('backend', 'hffs') or 'hffs').lower()
+        if mem_backend == 'entangled':
+            self.memory = create_entangled(config)
+        else:
+            self.memory = HFFSMemory(
+                base_path=config['filepaths']['memory_base'],
+                sponge_size=tuple(config['filepaths']['sponge_size'])
+            )
         # Core
         self.spine = NeuralSpine(config)
         self.curiosity = CuriosityEngine(memory=self.memory, threshold=config['training']['threshold'])
