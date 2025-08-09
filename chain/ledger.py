@@ -11,6 +11,26 @@ class Ledger:
         os.makedirs(base_path, exist_ok=True)
         self.blocks: List[Block] = []
         self._load()
+        if not self.blocks:
+            # Seed from genesis.json if present
+            genesis_path = os.path.join(os.path.dirname(self.base_path), 'genesis.json')
+            if os.path.isfile(genesis_path):
+                with open(genesis_path, 'r') as f:
+                    g = json.load(f)
+                genesis_block = Block(
+                    index=0,
+                    prev_hash="",
+                    timestamp=float(g.get('genesis_time', 0.0)),
+                    proposer=g.get('branding', {}).get('owner', 'genesis'),
+                    stake=0.0,
+                    ai_score=0.0,
+                    txs=[],
+                    signature_hex="",
+                    hash_hex="genesis",
+                )
+                with open(self.chain_file, 'a') as f:
+                    f.write(genesis_block.to_json() + "\n")
+                self.blocks.append(genesis_block)
 
     def _load(self):
         if not os.path.isfile(self.chain_file):
@@ -35,10 +55,8 @@ class Ledger:
         return len(self.blocks)
 
     def append(self, blk: Block) -> bool:
-        # Minimal consistency check
         if blk.prev_hash != self.last_hash():
             return False
-        # Persist
         with open(self.chain_file, 'a') as f:
             f.write(blk.to_json() + "\n")
         self.blocks.append(blk)

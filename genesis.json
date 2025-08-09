@@ -1,0 +1,15 @@
+{
+  "chain_id": "rsai-devnet",
+  "genesis_time": 1733788800,
+  "branding": {
+    "ai_name": "RS-AI",
+    "token_symbol": "RSAI",
+    "token_name": "RS-AI Coin",
+    "owner": "Gabriel Neal Christensen"
+  },
+  "initial_params": {
+    "base_reward": 1.0,
+    "stake_min": 0.0
+  },
+  "alloc": []
+}
